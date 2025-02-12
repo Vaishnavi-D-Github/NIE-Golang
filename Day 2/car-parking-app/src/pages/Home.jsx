@@ -4,7 +4,22 @@ import { Link } from "react-router-dom";
 
 const Home = () => {
     const [cars, setCars] = useState([
-        { id: 1, brand: "Toyota", number: "AB-1234", type: "SUV", incoming: "10:00 AM", outgoing: "2:00 PM", slot: "P-12" },
+        { id: 1, 
+            brand: "Toyota", 
+            number: "AB-1234", 
+            type: "SUV", 
+            incoming: "10:00 AM", 
+            outgoing: "2:00 PM", 
+            slot: "P-12" },
+        
+        { id: 2,
+            brand: "Honda",
+            number: "CD-5678",
+            type: "Sedan",
+            incoming: "11:00 AM",
+            outgoing: "3:00 PM",
+            slot: "P-13" },
+        
     ]);
 
 
