@@ -24,7 +24,6 @@ var dataFile = "data.json"
 
 func loadCars() ([]Car, error) {
 	file, err := os.Open(dataFile)
-
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +82,7 @@ func getCar(c *gin.Context) {
 		if car.ID == id {
 			c.JSON(http.StatusOK, gin.H{
 				"message": "Car parking details fetched successfully!",
-				"car":     cars,
+				"car":     car,
 			})
 			return
 		}
@@ -95,7 +94,8 @@ func updateCar(c *gin.Context) {
 	id := c.Param("id")
 	var updatedCar Car
 	if err := c.ShouldBindJSON(&updatedCar); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request payload"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request payload"})
+		return
 	}
 
 	cars, _ := loadCars()
@@ -107,6 +107,7 @@ func updateCar(c *gin.Context) {
 				"message": "Car parking details updated successfully!",
 				"car":     updatedCar,
 			})
+			return
 		}
 	}
 	c.JSON(http.StatusNotFound, gin.H{"error": "Car details not found"})
