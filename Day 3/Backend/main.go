@@ -76,10 +76,19 @@ func getCars(c *gin.Context) {
 
 func getCar(c *gin.Context) {
 	id := c.Param("id")
-	cars, _ := loadCars()
+	fmt.Printf("Fetching car with ID: %s\n", id)
+
+	cars, err := loadCars()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error loading car parking details"})
+		return
+	}
+
+	fmt.Printf("Loaded cars: %v\n", cars)
 
 	for _, car := range cars {
 		if car.ID == id {
+			fmt.Printf("Found car: %v\n", car)
 			c.JSON(http.StatusOK, gin.H{
 				"message": "Car parking details fetched successfully!",
 				"car":     car,
@@ -87,6 +96,8 @@ func getCar(c *gin.Context) {
 			return
 		}
 	}
+
+	fmt.Println("Car details not found")
 	c.JSON(http.StatusNotFound, gin.H{"error": "Car details not found"})
 }
 

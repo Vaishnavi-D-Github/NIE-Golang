@@ -1,7 +1,7 @@
 [
  {
   "id": "1",
-  "brand": "Toyota Traver",
+  "brand": "Toyota Innova",
   "number": "AJ-1551",
   "type": "XUV",
   "incoming": "09:00 AM",
@@ -9,12 +9,12 @@
   "slot": "B-1"
  },
  {
-  "id": "3",
-  "brand": "Toyota Travera",
-  "number": "AJ-1551",
-  "type": "XUV",
-  "incoming": "09:00 AM",
-  "outgoing": "02:00 PM",
-  "slot": "B-1"
+  "id": "2",
+  "brand": "Maruthi Suzuki Dezire",
+  "number": "AS-1551",
+  "type": "Sedan",
+  "incoming": "11:00 AM",
+  "outgoing": "03:00 PM",
+  "slot": "A-1"
  }
 ]
