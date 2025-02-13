@@ -1,52 +1,48 @@
 package main
 
 import (
-	"encoding/json"
+	"context"
 	"fmt"
-	"io/ioutil"
+	"log"
 	"net/http"
 	"os"
-	"strconv"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-type Car struct { //This is a model and actually a structure
-	ID       string `json:"id"`
-	Brand    string `json:"brand"`
-	Number   string `json:"number"`
-	Type     string `json:"type"`
-	Incoming string `json:"incoming_time"`
-	Outgoing string `json:"outgoing_time"`
-	Slot     string `json:"parking_slot"`
+type Car struct {
+	ID       primitive.ObjectID `bson:"_id,omitempty" json:"id"`
+	Brand    string             `json:"brand" bson:"brand"`
+	Number   string             `json:"number" bson:"number"`
+	Type     string             `json:"type" bson:"type"`
+	Incoming string             `json:"incoming" bson:"incoming_time"`
+	Outgoing string             `json:"outgoing" bson:"outgoing_time"`
+	Slot     string             `json:"slot" bson:"parking_slot"`
 }
 
-var dataFile = "data.json"
+var collection *mongo.Collection
 
-func loadCars() ([]Car, error) {
-	file, err := os.Open(dataFile)
-	if err != nil {
-		return nil, err
+func initMongoDB() {
+	mongoURI := os.Getenv("MONGO_URL")
+	if mongoURI == "" {
+		mongoURI = "mongodb://localhost:27017"
 	}
-	defer file.Close()
-	var cars []Car
-	err = json.NewDecoder(file).Decode(&cars)
+
+	clientOptions := options.Client().ApplyURI(mongoURI)
+	client, err := mongo.Connect(context.TODO(), clientOptions)
 	if err != nil {
-		return nil, err
+		log.Fatal("Error connecting to MongoDB:", err)
 	}
-	return cars, nil
+
+	fmt.Println("Connected to MongoDB!")
+	collection = client.Database("carparking").Collection("cars")
 }
 
-func saveCars(cars []Car) error {
-	file, err := json.MarshalIndent(cars, "", "  ")
-	if err != nil {
-		return err
-	}
-	return ioutil.WriteFile(dataFile, file, 0644)
-}
-
-// Checking if the data has come or not
 func createCar(c *gin.Context) {
 	var newCar Car
 	if err := c.ShouldBindJSON(&newCar); err != nil {
@@ -54,103 +50,119 @@ func createCar(c *gin.Context) {
 		return
 	}
 
-	// Load existing cars
-	cars, _ := loadCars()
+	newCar.ID = primitive.NewObjectID()
 
-	// Determine the next available ID
-	newID := "1" // Default ID if the file is empty
-	if len(cars) > 0 {
-		lastCar := cars[len(cars)-1] // Get last car in the list
-		lastID, err := strconv.Atoi(lastCar.ID)
-		if err == nil {
-			newID = strconv.Itoa(lastID + 1) // Increment ID
-		}
+	_, err := collection.InsertOne(context.TODO(), newCar)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to insert the car parking details"})
+		return
 	}
 
-	// Assign the new ID
-	newCar.ID = newID
-
-	// Append and save
-	cars = append(cars, newCar)
-	saveCars(cars)
-
 	c.JSON(http.StatusCreated, gin.H{
-		"message": "Car added successfully!",
+		"message": "Car parking created successfully!",
 		"car":     newCar,
 	})
 }
 
 func getCars(c *gin.Context) {
-	cars, err := loadCars()
+	cursor, err := collection.Find(context.TODO(), bson.M{})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error loading cars"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error loading car parking details"})
 		return
 	}
+	defer cursor.Close(context.TODO())
+
+	var cars []Car
+	for cursor.Next(context.TODO()) {
+		var car Car
+		if err := cursor.Decode(&car); err != nil {
+			continue
+		}
+		cars = append(cars, car)
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Cars retrieved successfully",
-		"cars":    cars,
+		"message": "Car parking details fetched successfully!",
+		"car":     cars,
 	})
 }
 
 func getCar(c *gin.Context) {
 	id := c.Param("id")
-	cars, _ := loadCars()
-	for _, car := range cars {
-		if car.ID == id {
-			c.JSON(http.StatusOK, gin.H{
-				"message": "Car retrieved successfully",
-				"car":     car,
-			})
-			return
-		}
+	objID, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"})
+		return
 	}
-	c.JSON(http.StatusNotFound, gin.H{"error": "Car not found"})
+
+	var car Car
+	err = collection.FindOne(context.TODO(), bson.M{"_id": objID}).Decode(&car)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Car not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Car parking details fetched successfully!",
+		"car":     car,
+	})
 }
 
 func updateCar(c *gin.Context) {
 	id := c.Param("id")
+	objID, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"})
+		return
+	}
+
 	var updatedCar Car
 	if err := c.ShouldBindJSON(&updatedCar); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request payload"})
 		return
 	}
-	cars, _ := loadCars()
-	for i, car := range cars {
-		if car.ID == id {
-			cars[i] = updatedCar
-			saveCars(cars)
-			c.JSON(http.StatusOK, gin.H{
-				"message": "Car updated successfully!",
-				"car":     updatedCar,
-			})
-			return
-		}
+
+	_, err = collection.UpdateOne(context.TODO(), bson.M{"_id": objID}, bson.M{"$set": updatedCar})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update car"})
 	}
-	c.JSON(http.StatusNotFound, gin.H{"error": "Car not found"})
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Car updated successfully!",
+		"car":     updatedCar,
+	})
 }
 
 func deleteCar(c *gin.Context) {
 	id := c.Param("id")
-	cars, _ := loadCars()
-	for i, car := range cars {
-		if car.ID == id {
-			cars = append(cars[:i], cars[i+1:]...)
-			saveCars(cars)
-			c.JSON(http.StatusOK, gin.H{"message": "Car deleted successfully!"})
-			return
-		}
+	objID, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"})
+		return
 	}
-	c.JSON(http.StatusNotFound, gin.H{"error": "Car not found"})
+
+	result, err := collection.DeleteOne(context.TODO(), bson.M{"_id": objID})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete parking details"})
+		return
+	}
+
+	if result.DeletedCount == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Car details not found"})
+	} else {
+		c.JSON(http.StatusOK, gin.H{"message": "Car details deleted successfully"})
+	}
 }
 
 func main() {
+	initMongoDB()
 	r := gin.Default()
 
-	// Enable CORS Middleware
+	//Enable CORS Middleware
 	r.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://localhost:5173"}, // React Frontend URL
+		AllowOrigins:     []string{"*"},
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE"},
 		AllowHeaders:     []string{"Content-Type"},
+		ExposeHeaders:    []string{"Content-Length"},
 		AllowCredentials: true,
 	}))
 
